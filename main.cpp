@@ -7,11 +7,11 @@
 
 using namespace std;
 
-const int N = 6;            // 아미노산의 개수
+const int N = 6;            // 아미노산의 개수 (HPHHPH 서열 길이에 맞춤)
 const int L = 6;            // 격자축의 크기
 const int M = L * L;        // 총 격자점 수
 const int K = N * M;        // 총 큐비트 수 (N * M)
-const double LAMBDA = 50.0; // 페널티 상수
+const double LAMBDA = 15.0; // [조정됨] 고전 SA 탐색을 위한 최적 페널티 상수
 const double DELTA = 2.0;   // 소수성 결합 보상
 
 string sequence = "HPHHPH"; // 아미노산 서열
@@ -114,8 +114,8 @@ int main()
 
     double T = 100.0;      // 초기 온도
     double T_min = 0.01;   // 최종 온도
-    double alpha = 0.9995; // 냉각률
-    int steps = 100000;    // 반복 횟수
+    double alpha = 0.9999; // 냉각 속도
+    int steps = 1500000;   // 탐색 횟수
 
     for (int s = 0; s < steps && T > T_min; ++s)
     {
@@ -145,24 +145,75 @@ int main()
         T *= alpha; // 냉각
     }
 
-    // --- 3. 결과 출력 ---
-    vector<string> grid(L, string(L, '.'));
-    cout << "도출된 고유구조" << "\n";
+    // 유효성 검증
+    vector<int> pos(N, -1);
+    bool one_hot_ok = true, overlap_ok = true, connectivity_ok = true;
+
     for (int i = 0; i < N; ++i)
     {
+        int count = 0;
         for (int a = 0; a < M; ++a)
         {
             if (x[get_idx(i, a)] == 1)
             {
-                grid[a / L][a % L] = sequence[i];
-                cout << "아미노산 " << i + 1 << "(" << sequence[i] << ") ~ (" << a / L << "," << a % L << ")" << "\n";
+                pos[i] = a;
+                count++;
             }
         }
+        if (count != 1)
+            one_hot_ok = false;
     }
-    for (int r = 0; r < L; ++r)
-        cout << grid[r] << "\n";
 
-    cout << "온도: " << T << "\n";
+    for (int i = 0; i < N; ++i)
+    {
+        for (int j = i + 1; j < N; ++j)
+        {
+            if (pos[i] != -1 && pos[i] == pos[j])
+                overlap_ok = false;
+        }
+    }
+
+    for (int i = 0; i < N - 1; ++i)
+    {
+        if (pos[i] == -1 || pos[i + 1] == -1 || !is_adjacent(pos[i], pos[i + 1]))
+            connectivity_ok = false;
+    }
+
+    // --- 3. 결과 출력 ---
+    cout << "\n====================================\n";
+    if (one_hot_ok && overlap_ok && connectivity_ok)
+    {
+        cout << "✅ 검증: 물리적으로 유효함" << "\n";
+    }
+    else
+    {
+        cout << "❌ 검증: 물리적으로 유효하지 않음" << "\n";
+        cout << "   (사유: " << (!one_hot_ok ? "위치오류 " : "")
+             << (!overlap_ok ? "좌표중첩 " : "")
+             << (!connectivity_ok ? "사슬끊어짐" : "") << ")" << "\n";
+    }
+    cout << "====================================\n";
+
+    vector<string> grid(L, string(L, '.'));
+    cout << "도출된 고유구조" << "\n";
+    for (int i = 0; i < N; ++i)
+    {
+        if (pos[i] != -1)
+        {
+            grid[pos[i] / L][pos[i] % L] = sequence[i];
+            cout << "아미노산 " << i + 1 << "(" << sequence[i] << ") ~ (" << pos[i] / L << "," << pos[i] % L << ")" << "\n";
+        }
+    }
+
+    cout << "\n[2차원 격자]\n";
+    for (int r = 0; r < L; ++r)
+    {
+        for (int c = 0; c < L; ++c)
+            cout << grid[r][c] << " ";
+        cout << "\n";
+    }
+
+    cout << "\n최종 온도: " << T << "\n";
 
     return 0;
 }
